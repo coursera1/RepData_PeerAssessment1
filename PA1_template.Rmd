@@ -7,19 +7,64 @@ output:
 
 
 ## Loading and preprocessing the data
+```{r echo=TRUE}
+con <- unz("./activity.zip", "activity.csv")
+data <- read.csv(con, colClasses = c("numeric", "Date", "numeric"))
+
+library(dplyr)
+data <- tbl_df(data)
+```
 
 
 
 ## What is mean total number of steps taken per day?
+```{r echo=TRUE}
+dayData <- group_by(data, date)
+stepPerDay <- summarise(dayData, totalSteps = sum(steps, na.rm = TRUE))
+hist(stepPerDay$totalSteps, breaks = 20)
 
-
+mean(stepPerDay$totalSteps)
+median(stepPerDay$totalSteps)
+```
 
 ## What is the average daily activity pattern?
+```{r echo=TRUE}
+intervalData <- group_by(data, interval)
+stepPerInterval <- summarise(intervalData, avgSteps = mean(steps, na.rm = TRUE))
+plot(stepPerInterval$interval, stepPerInterval$avgSteps, "l")
 
-
+stepPerInterval$interval[which.max(stepPerInterval$avgSteps)]
+```
 
 ## Imputing missing values
+```{r echo=TRUE}
+sum(is.na(data$steps))
+
+paddedData <- mutate(data, steps = ifelse(is.na(steps), stepPerInterval$avgSteps, steps))
+
+dayData <- group_by(paddedData, date)
+stepPerDay <- summarise(dayData, totalSteps = sum(steps, na.rm = TRUE))
+hist(stepPerDay$totalSteps, breaks = 20)
+
+mean(stepPerDay$totalSteps)
+median(stepPerDay$totalSteps)
+```
 
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r echo=TRUE}
+## Set LOCALS to get it right in english
+## because I'm in Belgium ("Thu" is "Jeu", "Fri" is "Ven" and "Sat" is "Sam")
+Sys.setlocale("LC_TIME", "English")
+paddedData <- mutate(paddedData, dayType = weekdays(date), dayType = as.factor(ifelse(dayType=="Sunday" | dayType=="Saturday", "weekend", "weekday")))
+## Get my default LOCALS back
+Sys.setlocale("LC_TIME","French_Belgium.1252")
+
+stepPerInterval<- paddedData %>% group_by(dayType, interval) %>% summarise(avgSteps = mean(steps))
+
+library(ggplot2)
+qplot(interval, avgSteps, data = stepPerInterval, geom = "line", facets = dayType ~ .)
+```
+
+
