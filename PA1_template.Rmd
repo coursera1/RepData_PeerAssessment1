@@ -7,16 +7,28 @@ output:
 
 ```{r echo=FALSE}
 ## Seeting global knit options
-knitr::opts_chunk$set(echo=TRUE, message=FALSE)
+knitr::opts_chunk$set(echo=TRUE, message=FALSE, warnings=FALSE, fig.width=10)
+
+
 ```
 
 
 ## Loading and preprocessing the data
 ```{r}
+## List of essential packages
+list <- c("dplyr", "ggplot2")
+## Select those that are not installed
+list <- list[!list %in% installed.packages()[, 1]]
+## Install the missing packages.
+if(length(list))
+  lapply(list, install.packages, repos = "http://cran.us.r-project.org")
+
 library(dplyr)
+library(ggplot2)
+
 ## Open .csv file in .zip file
 con <- unz("./activity.zip", "activity.csv")
-## Read the data
+## Read the data and transform into tbl_df
 data <- tbl_df(read.csv(con, colClasses = c("numeric", "Date", "numeric")))
 ```
 
@@ -24,53 +36,66 @@ data <- tbl_df(read.csv(con, colClasses = c("numeric", "Date", "numeric")))
 ```{r}
 ## Group by date and summarise by sum without taking NA
 stepPerDay <- data %>% group_by(date) %>% summarise(totalSteps = sum(steps, na.rm = TRUE))
-hist(stepPerDay$totalSteps, breaks = 20)
+qplot(totalSteps, data=stepPerDay, geom="histogram", 
+      main="Total number of steps per day", xlab="Number of steps")
 
-mean(stepPerDay$totalSteps)
-median(stepPerDay$totalSteps)
+meanStep<-mean(stepPerDay$totalSteps)
+medianStep<-median(stepPerDay$totalSteps)
 ```
+The steps per day average is `r sprintf("%.1f", meanStep)` and the median is `r sprintf("%.1f", medianStep)`.
 
 ## What is the average daily activity pattern?
 ```{r}
 ## Group by interval and summarise by average without taking NA
 stepPerInterval <- data %>% group_by(interval) %>% summarise(avgSteps = mean(steps, na.rm = TRUE))
-plot(stepPerInterval$interval, stepPerInterval$avgSteps, "l")
+qplot(stepPerInterval$interval, stepPerInterval$avgSteps, geom="line", 
+      main="Average of steps across all days and 5min intervals", xlab="Interval index", ylab="Avg of steps")
 
-stepPerInterval$interval[which.max(stepPerInterval$avgSteps)]
+intervalIndexMaxStep<-stepPerInterval$interval[which.max(stepPerInterval$avgSteps)]
 ```
+The interval index containing the maximum number of steps is `r intervalIndexMaxStep`.
 
 ## Imputing missing values
 ```{r}
 ## Counting NA
-sum(is.na(data$steps))
+naNumber<-sum(is.na(data$steps))
+```
+The number of missing values is `r naNumber`.
 
+We will now replace the NAs found in the original data by the average on every days for the same interval calculated in the previous step.
+```{r}
 ## Replace NA by the average on every days for this interval
-paddedData <- mutate(data, steps = ifelse(is.na(steps), stepPerInterval$avgSteps, steps))
+naRmData <- mutate(data, steps = ifelse(is.na(steps), stepPerInterval$avgSteps, steps))
 
 ## Group by day and summarise by sum without taking NA (which is useless here since NA have been replaced)
-stepPerDay <- paddedData %>% group_by(date) %>% summarise(totalSteps = sum(steps, na.rm = FALSE))
-hist(stepPerDay$totalSteps, breaks = 20)
+stepPerDay <- naRmData %>% group_by(date) %>% summarise(totalSteps = sum(steps, na.rm = FALSE))
+qplot(totalSteps, data=stepPerDay, geom="histogram", 
+      main="Total number of steps per day (with NA replaced)", xlab="Number of steps")
 
-mean(stepPerDay$totalSteps)
-median(stepPerDay$totalSteps)
+meanStep1<-mean(stepPerDay$totalSteps)
+medianStep1<-median(stepPerDay$totalSteps)
 ```
+The steps per day average  (of the data with NA replaced) is `r sprintf("%.1f", meanStep1)` and the median is `r sprintf("%.1f", medianStep1)`.
 
 ## Are there differences in activity patterns between weekdays and weekends?
 ```{r}
 ## Set LOCALS to get it right in english because I'm in Belgium and speeks french
 Sys.setlocale("LC_TIME", "English")
 
-## Add weekday ans weekend factor
-paddedData <- mutate(paddedData, dayType = weekdays(date), dayType = as.factor(ifelse(dayType=="Sunday" | dayType=="Saturday", "weekend", "weekday")))
+## Add weekday and weekend factor
+naRmData <- mutate(naRmData, 
+                   dayType = weekdays(date), 
+                   dayType = as.factor(ifelse(dayType=="Sunday" | dayType=="Saturday", "weekend", "weekday")))
 
 ## Get my default LOCALS back
 Sys.setlocale("LC_TIME","French_Belgium.1252")
 
-## Group by type of day ans interval
-stepPerInterval<- paddedData %>% group_by(dayType, interval) %>% summarise(avgSteps = mean(steps))
+## Group by type of day and interval
+stepPerInterval<- naRmData %>% group_by(dayType, interval) %>% summarise(avgSteps = mean(steps))
 
-library(ggplot2)
-qplot(interval, avgSteps, data = stepPerInterval, geom = "line", facets = dayType ~ .)
+qplot(interval, avgSteps, data = stepPerInterval, geom = "line", facets = dayType ~ .,
+      main="Average of steps across all days and 5min intervals for weekdays and weekend", 
+      xlab="Interval index", ylab="Avg of steps")
 ```
 
-Generate html by knit2html("PA1_template.Rmd")
+Generated html by knit2html("PA1_template.Rmd")
